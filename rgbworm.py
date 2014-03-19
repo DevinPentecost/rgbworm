@@ -15,8 +15,8 @@ class RGBWorm:
 		#Set defaults
 		
 		#Pixel size
-		self.pixelWidth = 2
-		self.pixelHeight = 2
+		self.pixelWidth = 1
+		self.pixelHeight = 1
 		
 		#Color steps
 		self.redMin = 100
@@ -302,4 +302,4 @@ if __name__ == '__main__':
 	#Build it and run it
 	worm = RGBWorm()
 	worm.setup()
-	worm.renderRandom()
+	worm.renderWorm()
