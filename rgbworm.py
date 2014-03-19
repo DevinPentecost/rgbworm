@@ -182,13 +182,3 @@ class RGBWorm:
                         currentPixels.append((pixelX, pixelY))
                         
         print 'DONE'
-                        
-"""
-Run on command line
-"""
-if __name__ == '__main__':
-    #RUN
-    d = Draw()
-    d.setup()
-    d.render()
-                        
