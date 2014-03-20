@@ -9,6 +9,8 @@ import math, random, sys
 import time
 
 class RGBWorm:
+
+	RENDERTYPES = ['WORM', 'RANDOM', 'BLOOM']
 	
 	#Initialization
 	def __init__(self):
@@ -16,19 +18,19 @@ class RGBWorm:
 		#Set defaults
 		
 		#Pixel size
-		self.pixelWidth = 2
-		self.pixelHeight = 2
+		self.pixelWidth = 1
+		self.pixelHeight = 1
 		
 		#Color steps
-		self.redMin = 1
+		self.redMin = 0
 		self.redMax = 255
 		self.redStep = 5
 		
-		self.greenMin = 1
+		self.greenMin = 0
 		self.greenMax = 255
 		self.greenStep = 5
 		
-		self.blueMin = 1
+		self.blueMin = 0
 		self.blueMax = 255
 		self.blueStep = 5
 		
@@ -45,7 +47,10 @@ class RGBWorm:
 		
 		#How many 'worms' to run at any time
 		#Running multiple worms creates a 'wider' worm
-		self.simultaneousWorms = 2
+		self.simultaneousWorms = 1
+		
+		#Render using WORM by default
+		self.renderType = 'WORM'
 	   
 	"""
 	setup
@@ -115,6 +120,12 @@ class RGBWorm:
 			
 		#The count of colors used
 		self.colorCount = 0
+		
+		#Start with 0 pixels in the queue
+		self.currentPixelColors = []
+		
+		#Delay list for bloom render
+		self.bloomDelay = []
 		
 	"""
 	shuffle(l)
@@ -218,22 +229,78 @@ class RGBWorm:
 		
 		#Depending on the operating mode, we get some pixel(s) and color(s)
 		
-		pixels = []
-		colors = []
+		pixelColors = []
 		
-		#For now, just grab the X number to use
+		#Get the requested number of worms...
 		for i in range(0, self.simultaneousWorms):
+		
+			#Are we grabbing worm type?
+			if self.renderType is 'WORM':
+
+				#Are there enough?
+				if self.currentPixelColors:
+				
+					#Pop them off and use
+					pixelColors.append(self.currentPixelColors.pop())
+		
+			#What about RANDOM! RANDOM! RANDOM!
+			if self.renderType is 'RANDOM':
 			
-			#Are there enough?
-			if self.currentPixels:
-			
-				#Pop them off and use
-				pixels.append(self.currentPixels.pop())
-				colors.append(self.currentColors.pop())
+				#Are there enough?
+				if self.currentPixelColors:
+					
+					#Get an index...
+					index = self.random.randrange(0, len(self.currentPixels))
+					
+					#Pop them off and use
+					pixelColors.append(self.currentPixelColors.pop(index))
+		
+			#Bloom!
+			#Start in the middle, try to expand out as uniformly as possible...
+			if self.renderType is 'BLOOM':
+
+				#Is there still one in the current pixels?
+				if not self.currentPixelColors:
+
+					#There aren't any left. Are there any left in the delay queue? Move them over!
+					self.currentPixelColors =  self.bloomDelay
+					
+					#Are there any new ones?
+					if self.currentPixelColors:
+
+						#Pop it off and use it
+						pixelColors.append(self.currentPixelColors.pop())
+				
+				else:
+
+					#Pop it off and use it
+					pixelColors.append(self.currentPixelColors.pop())
+					
+
 		
 		#Return the tuple
-		return (pixels, colors)
+		return pixelColors
 		
+	"""
+	addCurrentPixel
+	Adds a 'current' pixel to the 'to be done' list
+	"""
+	def addCurrentPixelColor(self, pixelColor):
+		
+		#What we do will depend on the operating mode
+		
+		#Random or worm?
+		if self.renderType in ('WORM', 'RANDOM'):
+			
+			#Just add them to the end
+			self.currentPixelColors.append(pixelColor)
+			
+		#Bloom?
+		if self.renderType is 'BLOOM':
+
+			#Queue it up for later
+			self.bloomDelay.insert(0, pixelColor)
+				
 	"""
 	renderWorm
 	Do all the hard work moving a worm around
@@ -253,36 +320,34 @@ class RGBWorm:
 		startY = self.canvasSize/2
 		
 		#All the active pixels. Start with the middle one
-		self.currentPixels = [(startX, startY)]
-		self.currentColors = [(startRed, startGreen, startBlue)]
+		self.currentPixelColors.append( ((startX, startY), (startRed, startGreen, startBlue)) )
 		
 		#'Use' the first pixel
 		self.usePixel((startX, startY))
 		self.useColor((startRed, startGreen, startBlue))
 		
 		#While we still have active pixels
-		while self.currentPixels:
+		while self.currentPixelColors or self.bloomDelay:
 		
 			#We use a list of pixels to render this go around
-			(pixelsList, colorsList) = self.getPixelsColors()
+			pixelColors = self.getPixelsColors()
 			
 			#Save a copy so we can append them onto the end
-			pixelsDelay = []
-			colorsDelay = []
+			pixelColorsDelay = []
 			
 			#Keep picking pixels/colors while we can...
-			while pixelsList and colorsList:
+			while pixelColors:
 				
 				#Get the pixel
-				currentPixel = pixelsList.pop()
-				currentColor = colorsList.pop()
+				currentPixelColor = pixelColors.pop()
+				
+				#Get info from the pixel color tuple
+				currentPixel = currentPixelColor[0]
+				currentColor = currentPixelColor[1]
 
 				#We haven't found a neighbor yet
 				firstNeighbor = True
-				
-				#Tell us!
-				#print "Drawing pixel at location: ", currentPixel[0], currentPixel[1], "with color: ", currentColor[0], currentColor[1], currentColor[2]
-				
+						
 				#Draw it
 				self.drawSquare(currentPixel[0], currentPixel[1], currentColor[0], currentColor[1], currentColor[2])
 									
@@ -304,6 +369,7 @@ class RGBWorm:
 							b = ((self.blueStep * b)) + currentColor[2]
 							
 							#Is it one of the delayed ones? Don't do them either
+							colorsDelay = [colorPixel[1] for colorPixel in pixelColorsDelay]
 							if (r, g, b) in colorsDelay:
 								continue
 							
@@ -321,8 +387,6 @@ class RGBWorm:
 							
 							if not self.colorUsed((r, g, b)):
 								possibleColors.append((r, g, b))
-								
-				#print 'POSSIBLE COLORS:', possibleColors
 					
 				#Now we check all its neighbors
 				for x in self.shuffle([-1, 0, 1]):
@@ -339,6 +403,7 @@ class RGBWorm:
 						pixelY = currentPixel[1] + (y * self.pixelHeight)
 						
 						#Is it one of the delayed ones? Don't do those again either
+						pixelsDelay = [colorPixel[0] for colorPixel in pixelColorsDelay]
 						if (pixelX, pixelY) in pixelsDelay:
 							continue
 						
@@ -375,20 +440,17 @@ class RGBWorm:
 								firstNeighbor = False
 								
 								#Also push it to our delay
-								pixelsDelay.append((pixelX, pixelY))
-								colorsDelay.append(newColor)
+								pixelColorsDelay.append( ((pixelX, pixelY), newColor) )
 								
 							else:
 								#Add it to the list of current pixels and colors immediately
-								self.currentPixels.append((pixelX, pixelY))
-								self.currentColors.append(newColor)								
+								self.addCurrentPixelColor( ((pixelX, pixelY), newColor) )						
 							
 							
 			#The current set of pixels/colors need to be added onto the end
-			while pixelsDelay and colorsDelay:
+			while pixelColorsDelay:
 				#Add these onto the end
-				self.currentPixels.append(pixelsDelay.pop())
-				self.currentColors.append(colorsDelay.pop())
+				self.addCurrentPixelColor(pixelColorsDelay.pop())
 				
 		#Done
 		print "Done with Render."
@@ -398,28 +460,50 @@ class RGBWorm:
 if __name__ == '__main__':
 	#Build it and run it
 	worm = RGBWorm()
+	
 	worm.randomSeed = 368909920
 	
 	#For stats...
-	canvasSizes = range(40, 100, 5)
+	canvasSizes = range(40, 100, 20)
 	
-	#Time each size
+	renderTypes = ['WORM', 'RANDOM']
+	
+	wormCounts = [1, 2, 3, 4, 5, 6]
+	
+	"""
+	#Time each render as well as going through all type...
 	for size in canvasSizes:
+		for type in renderTypes:
+			for count in wormCounts:
 		
-		startTime = time.time()
-		worm.canvasSizeReduction = float(size)
-		worm.setup()
-		worm.renderWorm()
-		endTime = time.time() - startTime
+				startTime = time.time()
+				
+				worm.canvasSizeReduction = float(size)
+				worm.renderType = type
+				worm.simultaneousWorms = count
+				
+				worm.setup()
+				worm.renderWorm()
+				endTime = time.time() - startTime
+				
+				#Print out the amount of colors used
+				print 'Pixels used out of total: ', worm.pixelCount, worm.totalPixels, (float(worm.pixelCount)/float(worm.totalPixels))*100.0
+				print 'Colors used out of total: ', worm.colorCount, worm.totalColors, (float(worm.colorCount)/float(worm.totalColors))*100.0
+				print 'Exectution time: ', endTime, 's'
+				
+				#Wait for enter before we kill it
+				#raw_input("Render Complete!\nPress Enter to continue...\n")
+				#worm.clear()
+	"""
+	
+	#Basic run
+	worm.canvasSizeReduction = 100.0
+	worm.renderType = 'BLOOM'
+	worm.setup()
+	worm.renderWorm()
 		
-		#Print out the amount of colors used
-		print 'Pixels used out of total: ', worm.pixelCount, worm.totalPixels, (float(worm.pixelCount)/float(worm.totalPixels))*100.0
-		print 'Colors used out of total: ', worm.colorCount, worm.totalColors, (float(worm.colorCount)/float(worm.totalColors))*100.0
-		print 'Exectution time: ', endTime, 's'
-		
-		#Wait for enter before we kill it
-		#raw_input("Render Complete!\nPress Enter to quit...\n")
-		#worm.clear()
+	#Completely done!
+	raw_input("Done with RGBWorm command line. Hit enter to quit...")
 		
 		
 	
