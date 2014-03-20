@@ -6,6 +6,7 @@ Helps with drawing
 #Imports
 from Tkinter import *
 import math, random, sys
+import time
 
 class RGBWorm:
 	
@@ -15,19 +16,19 @@ class RGBWorm:
 		#Set defaults
 		
 		#Pixel size
-		self.pixelWidth = 3
-		self.pixelHeight = 3
+		self.pixelWidth = 2
+		self.pixelHeight = 2
 		
 		#Color steps
-		self.redMin = 100
+		self.redMin = 1
 		self.redMax = 255
 		self.redStep = 5
 		
-		self.greenMin = 100
+		self.greenMin = 1
 		self.greenMax = 255
 		self.greenStep = 5
 		
-		self.blueMin = 100
+		self.blueMin = 1
 		self.blueMax = 255
 		self.blueStep = 5
 		
@@ -38,6 +39,13 @@ class RGBWorm:
 		#What seed to use
 		self.randomSeed = None
 		self.random = None
+		
+		#Canvas size reduction percentage, do help reduce whitespace
+		self.canvasSizeReduction = 100.0
+		
+		#How many 'worms' to run at any time
+		#Running multiple worms creates a 'wider' worm
+		self.simultaneousWorms = 2
 	   
 	"""
 	setup
@@ -49,7 +57,9 @@ class RGBWorm:
 		if self.randomSeed is None:
 			self.randomSeed = random.randrange(0, sys.maxint)
 		self.random = random.Random(self.randomSeed)
+		
 		print "Setup with Random Seed: " + str(self.randomSeed)
+		print "Canvas Size at " + str(self.canvasSizeReduction) + '%'
 		
 		#Total number for each color
 		self.redTotal = (self.redMax - self.redMin)/self.redStep
@@ -57,10 +67,13 @@ class RGBWorm:
 		self.blueTotal = (self.blueMax - self.blueMin)/self.blueStep
 		
 		#Figure out the number of pixels to make
-		self.totalPixels = self.redTotal * self.greenTotal * self.blueTotal
+		self.totalColors = (self.redTotal * self.greenTotal * self.blueTotal)
 							
 		#Find the best square to hold them I guess
-		self.canvasSize = int(math.sqrt(self.totalPixels * (self.pixelHeight * self.pixelWidth)))
+		self.canvasSize = int(math.sqrt(self.totalColors * (self.pixelHeight * self.pixelWidth)) * float(self.canvasSizeReduction/100.0))
+		
+		#The total pixel count
+		self.totalPixels = (self.canvasSize * self.canvasSize) / (self.pixelWidth * self.pixelHeight)
 		
 		#Set up the canvas
 		master = Tk()
@@ -69,6 +82,7 @@ class RGBWorm:
 		
 		#Generate the lookup arrays for used pixels
 		#For each possible X coordinate...
+		self.usedPixels = []
 		for x in range(0, self.canvasSize):
 		
 			#Make a list Y coordinates 'tall'
@@ -79,6 +93,7 @@ class RGBWorm:
 			
 		#Generate the lookup arrays for used color
 		#For each possible Red...
+		self.usedColors = []
 		for r in range(0, self.redTotal):
 		
 			#Make a 'green' list
@@ -94,7 +109,12 @@ class RGBWorm:
 			
 			#Append this GREENxBLUE list
 			self.usedColors.append(gl)
-				
+			
+		#The count of pixels used
+		self.pixelCount = 0	
+			
+		#The count of colors used
+		self.colorCount = 0
 		
 	"""
 	shuffle(l)
@@ -109,7 +129,7 @@ class RGBWorm:
 	Clears the screen canvas
 	"""
 	def clear(self):
-		self.screen.clear()
+		self.screen.delete("all")
 		
 	"""
 	drawSquare(x, y, color)
@@ -157,6 +177,9 @@ class RGBWorm:
 		g = (g - self.greenMin)/self.greenStep - 1
 		b = (b - self.blueMin)/self.blueStep - 1
 		
+		#Increment the color counter
+		self.colorCount += 1
+		
 		#Simply set it to 1
 		self.usedColors[r][g][b] = 1
 		
@@ -168,7 +191,7 @@ class RGBWorm:
 		
 		#Get the values
 		(x, y) = pixel
-	
+		
 		#Check to see if it is 'used' as 1
 		return self.usedPixels[x][y] is 1
 		
@@ -180,16 +203,45 @@ class RGBWorm:
 	
 		#Get the values
 		(x, y) = pixel
+		
+		#Increment the pixel count
+		self.pixelCount += 1
 	
 		#Simply set it to 1, or 'used'
 		self.usedPixels[x][y] = 1
 		
+	"""
+	getPixelsColors
+	Returns a tuple of pixel/color lists to use this render round
+	"""
+	def getPixelsColors(self):
+		
+		#Depending on the operating mode, we get some pixel(s) and color(s)
+		
+		pixels = []
+		colors = []
+		
+		#For now, just grab the X number to use
+		for i in range(0, self.simultaneousWorms):
+			
+			#Are there enough?
+			if self.currentPixels:
+			
+				#Pop them off and use
+				pixels.append(self.currentPixels.pop())
+				colors.append(self.currentColors.pop())
+		
+		#Return the tuple
+		return (pixels, colors)
 		
 	"""
 	renderWorm
 	Do all the hard work moving a worm around
 	"""
 	def renderWorm(self):
+		
+		#We're starting!
+		print "Beginning render..."
 		
 		#Randomly generate the starting color
 		startRed = self.random.randrange(self.redMin, self.redMax, self.redStep)
@@ -210,102 +262,171 @@ class RGBWorm:
 		
 		#While we still have active pixels
 		while self.currentPixels:
+		
+			#We use a list of pixels to render this go around
+			(pixelsList, colorsList) = self.getPixelsColors()
 			
-			#Get the pixel
-			currentPixel = self.currentPixels.pop()
-			currentColor = self.currentColors.pop()
-
-
-			#Tell us!
-			#print "Drawing pixel at location: ", currentPixel[0], currentPixel[1], "with color: ", currentColor[0], currentColor[1], currentColor[2]
+			#Save a copy so we can append them onto the end
+			pixelsDelay = []
+			colorsDelay = []
 			
-			#Draw it
-			self.drawSquare(currentPixel[0], currentPixel[1], currentColor[0], currentColor[1], currentColor[2])
-			
-			#Add it to the used pixels
-			self.usePixel(currentPixel)
+			#Keep picking pixels/colors while we can...
+			while pixelsList and colorsList:
 				
-			#We want to assign these neighbors colors
-			#Lets build all the possible colors that could be neighbors
-			possibleColors = []
-			for r in self.shuffle([-1, 0, 1]):
-				for g in self.shuffle([-1, 0, 1]):
-					for b in self.shuffle([-1, 0, 1]):
+				#Get the pixel
+				currentPixel = pixelsList.pop()
+				currentColor = colorsList.pop()
+
+				#We haven't found a neighbor yet
+				firstNeighbor = True
+				
+				#Tell us!
+				#print "Drawing pixel at location: ", currentPixel[0], currentPixel[1], "with color: ", currentColor[0], currentColor[1], currentColor[2]
+				
+				#Draw it
+				self.drawSquare(currentPixel[0], currentPixel[1], currentColor[0], currentColor[1], currentColor[2])
+									
+				#We want to assign these neighbors colors
+				#Lets build all the possible colors that could be neighbors
+				possibleColors = []
+				for r in self.shuffle([-1, 0, 1]):
+					for g in self.shuffle([-1, 0, 1]):
+						for b in self.shuffle([-1, 0, 1]):
+						
+							#Is it the same color? One of the delayed ones?
+							if (r is 0 and g is 0 and b is 0):
+								#Dont use it
+								continue
+							
+							#Add them to the possibilities
+							r = ((self.redStep * r)) + currentColor[0]
+							g = ((self.greenStep * g)) + currentColor[1]
+							b = ((self.blueStep * b)) + currentColor[2]
+							
+							#Is it one of the delayed ones? Don't do them either
+							if (r, g, b) in colorsDelay:
+								continue
+							
+							#Is the color out of range?
+							if r < 0 or r > 255 or \
+								g < 0 or g > 255 or \
+								b < 0 or b > 255:
+								continue
 								
-						#Add them to the possibilities
-						r = ((self.redStep * r)) + currentColor[0]
-						g = ((self.greenStep * g)) + currentColor[1]
-						b = ((self.blueStep * b)) + currentColor[2]
-						
-						#Is the color out of range?
-						if r < 0 or r > 255 or \
-							g < 0 or g > 255 or \
-							b < 0 or b > 255:
-							continue
+							#Is the color outside of min/max ranges?
+							if 	r < self.redMin or r > self.redMax or \
+								g < self.greenMin or g > self.greenMax or \
+								b < self.blueMin or b > self.blueMax:
+								continue
 							
-						#Is the color outside of min/max ranges?
-						if 	r < self.redMin or r > self.redMax or \
-							g < self.greenMin or g > self.greenMax or \
-							b < self.blueMin or b > self.blueMax:
+							if not self.colorUsed((r, g, b)):
+								possibleColors.append((r, g, b))
+								
+				#print 'POSSIBLE COLORS:', possibleColors
+					
+				#Now we check all its neighbors
+				for x in self.shuffle([-1, 0, 1]):
+					for y in self.shuffle([-1, 0, 1]):
+						
+						#Is it the same pixel?
+						if (x is 0 and y is 0):
+							#Don't do ourselves again!
+							continue
+					
+	
+						#Go that far left or right, depending on the pixel size
+						pixelX = currentPixel[0] + (x * self.pixelWidth)	
+						pixelY = currentPixel[1] + (y * self.pixelHeight)
+						
+						#Is it one of the delayed ones? Don't do those again either
+						if (pixelX, pixelY) in pixelsDelay:
 							continue
 						
-						if not self.colorUsed((r, g, b)):
-							possibleColors.append((r, g, b))
+						#Did we go off the edge?
+						if 	pixelX < 0 or \
+							pixelX >= self.canvasSize or \
+							pixelY < 0 or \
+							pixelY >= self.canvasSize:
 							
-			#print 'POSSIBLE COLORS:', possibleColors
+							#Ignore this pixel
+							continue
+						
+						#Do we already have this pixel?
+						if self.pixelUsed((pixelX, pixelY)):
+	
+							#Also ignore it
+							continue
+						
+						#Randomly pick one for the neighbor colors if there is one. Otherwise WHO KNOWS
+						if possibleColors:
+							
+							#Pick the color and remove it
+							index = self.random.randrange(len(possibleColors))
+							newColor = possibleColors.pop(index)
+							
+							#Add it to the used pixels and colors
+							self.usePixel((pixelX, pixelY))
+							self.useColor(newColor)
+							
+							#If we are the first 'neighbor' of this pixel, we want to add it at the end!
+							if firstNeighbor:
+							
+								#Don't use it again!
+								firstNeighbor = False
+								
+								#Also push it to our delay
+								pixelsDelay.append((pixelX, pixelY))
+								colorsDelay.append(newColor)
+								
+							else:
+								#Add it to the list of current pixels and colors immediately
+								self.currentPixels.append((pixelX, pixelY))
+								self.currentColors.append(newColor)								
+							
+							
+			#The current set of pixels/colors need to be added onto the end
+			while pixelsDelay and colorsDelay:
+				#Add these onto the end
+				self.currentPixels.append(pixelsDelay.pop())
+				self.currentColors.append(colorsDelay.pop())
 				
-			#Now we check all its neighbors
-			for x in self.shuffle([-1, 0, 1]):
-				for y in self.shuffle([-1, 0, 1]):
+		#Done
+		print "Done with Render."
 
-					#Go that far left or right, depending on the pixel size
-					pixelX = currentPixel[0] + (x * self.pixelWidth)	
-					pixelY = currentPixel[1] + (y * self.pixelHeight)
-					
-					#Did we go off the edge?
-					if pixelX <= 0 or \
-						pixelX > self.canvasSize or \
-						pixelY <= 0 or \
-						pixelY > self.canvasSize:
-						
-						#Ignore this pixel
-						#print "We went off the edge"
-						continue
-					
-					#Do we already have this pixel?
-					if self.pixelUsed((pixelX, pixelY)):
-
-						#Also ignore it
-						continue
-					
-					#Randomly pick one for the neighbor color if there is one. Otherwise WHO KNOWS
-					if possibleColors:
-						
-						#Pick the color
-						index = self.random.randrange(len(possibleColors))
-						newColor = possibleColors[index]
-						
-						#Remove from possible colors
-						possibleColors.remove(newColor)
-						self.currentColors.append(newColor)
-						
-						#Add this pixel to the draw queue
-						self.currentPixels.append((pixelX, pixelY))
-						
-						#Say we've already selected this color
-						self.useColor(newColor)
-						
-						#Also add this pixel
-						self.usePixel((pixelX, pixelY))
 		
 #Default running from command line
 if __name__ == '__main__':
 	#Build it and run it
 	worm = RGBWorm()
-	worm.randomSeed = 1448864733
-	worm.setup()
-	worm.renderWorm()
+	worm.randomSeed = 368909920
 	
-	#Wait for enter before we kill it
-	input("Render Complete!\nPress Enter to quit...\n")
+	#For stats...
+	canvasSizes = range(40, 100, 5)
+	
+	#Time each size
+	for size in canvasSizes:
+		
+		startTime = time.time()
+		worm.canvasSizeReduction = float(size)
+		worm.setup()
+		worm.renderWorm()
+		endTime = time.time() - startTime
+		
+		#Print out the amount of colors used
+		print 'Pixels used out of total: ', worm.pixelCount, worm.totalPixels, (float(worm.pixelCount)/float(worm.totalPixels))*100.0
+		print 'Colors used out of total: ', worm.colorCount, worm.totalColors, (float(worm.colorCount)/float(worm.totalColors))*100.0
+		print 'Exectution time: ', endTime, 's'
+		
+		#Wait for enter before we kill it
+		#raw_input("Render Complete!\nPress Enter to quit...\n")
+		#worm.clear()
+		
+		
+	
+	
+	
+	
+
+	
+	
 
