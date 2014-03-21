@@ -7,6 +7,7 @@ Helps with drawing
 from Tkinter import *
 import math, random, sys
 import time
+import Image, ImageDraw
 
 class RGBWorm:
 
@@ -127,6 +128,11 @@ class RGBWorm:
 		#Delay list for bloom render
 		self.bloomDelay = []
 		
+		#Image for outputting
+		self.image = Image.new("RGB", (self.canvasSize, self.canvasSize), '#FFFFFF')
+		self.draw = ImageDraw.Draw(self.image)
+		
+		
 	"""
 	shuffle(l)
 	Shuffles a list and returns it
@@ -143,6 +149,14 @@ class RGBWorm:
 		self.screen.delete("all")
 		
 	"""
+	saveImage
+	Saves the image to a path
+	"""
+	def saveImage(self, path):
+		#Just save it
+		self.image.save(path)
+		
+	"""
 	drawSquare(x, y, color)
 	Draws a square at the X/Y location (top left of the square), of a height/width and of a color
 	"""
@@ -153,6 +167,9 @@ class RGBWorm:
 		
 		#Draw the rect
 		self.screen.create_rectangle(x, y, x + self.pixelWidth, y + self.pixelHeight, fill = color, width = 0)
+		
+		#Also draw to the image
+		self.draw.rectangle( [x, y, x + self.pixelWidth, y + self.pixelHeight], fill = color)
 		
 		#Render the canvas
 		self.screen.update()
@@ -250,7 +267,7 @@ class RGBWorm:
 				if self.currentPixelColors:
 					
 					#Get an index...
-					index = self.random.randrange(0, len(self.currentPixels))
+					index = self.random.randrange(0, len(self.currentPixelColors))
 					
 					#Pop them off and use
 					pixelColors.append(self.currentPixelColors.pop(index))
@@ -461,16 +478,16 @@ if __name__ == '__main__':
 	#Build it and run it
 	worm = RGBWorm()
 	
-	worm.randomSeed = 368909920
+	#worm.randomSeed = 368909920
 	
 	#For stats...
-	canvasSizes = range(40, 100, 20)
+	canvasSizes = range(40, 80, 10)
 	
-	renderTypes = ['WORM', 'RANDOM']
+	renderTypes = ['WORM', 'RANDOM', 'BLOOM']
 	
-	wormCounts = [1, 2, 3, 4, 5, 6]
+	wormCounts = [1, 2]
 	
-	"""
+	
 	#Time each render as well as going through all type...
 	for size in canvasSizes:
 		for type in renderTypes:
@@ -492,16 +509,22 @@ if __name__ == '__main__':
 				print 'Exectution time: ', endTime, 's'
 				
 				#Wait for enter before we kill it
+				path = './Images/' + str(time.time()) + '_' + str(worm.randomSeed) + '.png'
+				print 'Saving Image to path: ' + str(path)
+				worm.saveImage(path)
 				#raw_input("Render Complete!\nPress Enter to continue...\n")
 				#worm.clear()
-	"""
 	
+	
+	"""
 	#Basic run
-	worm.canvasSizeReduction = 100.0
+	worm.canvasSizeReduction = 40.0
 	worm.renderType = 'BLOOM'
 	worm.setup()
 	worm.renderWorm()
-		
+	worm.saveImage('./Images/' + str(time.time()) + '_' + str(worm.randomSeed) + '.png')
+	"""
+	
 	#Completely done!
 	raw_input("Done with RGBWorm command line. Hit enter to quit...")
 		
